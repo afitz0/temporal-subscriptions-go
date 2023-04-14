@@ -36,7 +36,7 @@ func main() {
 	sub := starter.SubscriptionInfo{
 		TrialPeriodDays:   float64(10.0 / (24 * 60 * 60)),
 		Amount:            10.00,
-		BillingPeriodDays: float64(10.0 / (24 * 60 * 60)),
+		BillingPeriodDays: float64(1.0 / (24 * 60 * 60)),
 	}
 
 	fmt.Println("trial: ", sub.TrialPeriodDays)
@@ -48,10 +48,12 @@ func main() {
 
 	log.Println("Started workflow", "WorkflowID", we.GetID(), "RunID", we.GetRunID())
 
-	// Synchronously wait for the workflow completion.
-	err = we.Get(context.Background(), nil)
-	if err != nil {
-		log.Fatalln("Unable get workflow result", err)
-	}
-	log.Println("Workflow Done!")
+	/*
+		// Synchronously wait for the workflow completion.
+		err = we.Get(context.Background(), nil)
+		if err != nil {
+			log.Fatalln("Unable get workflow result", err)
+		}
+		log.Println("Workflow Done!")
+	*/
 }

@@ -7,10 +7,15 @@ import (
 )
 
 var (
-	EVENT_HISTORY_THRESHOLD = 20000
+	EVENT_HISTORY_THRESHOLD      = 1000
+	HISTORY_CHECK_PERIOD_SECONDS = 5
 )
 
-func HandleSignals(ctx workflow.Context, canChannel workflow.Channel) {
+type Messages struct {
+	UpdateInfo UpdateSignal
+}
+
+func (s *Messages) HandleSignals(ctx workflow.Context, canChannel workflow.Channel) {
 	logger := workflow.GetLogger(ctx)
 	selector := workflow.NewSelector(ctx)
 	info := workflow.GetInfo(ctx)
@@ -52,16 +57,16 @@ func SubscriptionWorkflow(ctx workflow.Context, customer CustomerInfo, subscript
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 	trialSelector := workflow.NewSelector(ctx)
-	canceled := false
 
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Subscription workflow started", "customer", customer, "subscription", subscription)
 
 	// Immediately kick off update/cancel handlers, since those can come in at
 	// any time. Channel used to signal that Continue-As-New is needed
+	var m Messages
 	continueAsNew := workflow.NewChannel(ctx)
 	workflow.Go(ctx, func(ctx workflow.Context) {
-		HandleSignals(ctx, continueAsNew)
+		m.HandleSignals(ctx, continueAsNew)
 	})
 
 	// Start trial period timer, async
@@ -83,17 +88,25 @@ func SubscriptionWorkflow(ctx workflow.Context, customer CustomerInfo, subscript
 		var canMessage bool
 		c.Receive(ctx, &canMessage)
 		if canMessage {
+			logger.Info("History size too big. time to CAN")
 			// TODO continue-as-new
 		}
 	})
 
 	trialSelector.Select(ctx)
 
-	if info.GetCurrentHistoryLength() > EVENT_HISTORY_THRESHOLD {
-		continueAsNew.Send(ctx, true)
-	}
+	workflow.Go(ctx, func(gCtx workflow.Context) {
+		for {
+			_ = workflow.Sleep(gCtx, time.Duration(HISTORY_CHECK_PERIOD_SECONDS*int(time.Second)))
 
-	for !canceled {
+			logger.Info("Current history length", "History Length", info.GetCurrentHistoryLength())
+			if info.GetCurrentHistoryLength() > EVENT_HISTORY_THRESHOLD {
+				continueAsNew.Send(gCtx, true)
+			}
+		}
+	})
+
+	for !m.UpdateInfo.CancelSubscription {
 		// start of billing cycle, charge a subscription
 		err = workflow.ExecuteActivity(ctx, a.ChargeSubscription, customer, subscription).Get(ctx, nil)
 		if err != nil {
@@ -101,15 +114,22 @@ func SubscriptionWorkflow(ctx workflow.Context, customer CustomerInfo, subscript
 			return err
 		}
 
-		// start timer for billing period. Must be async as update/cancel signals may come in.
-		err = workflow.Sleep(ctx, time.Duration(subscription.BillingPeriodDays*24*float64(time.Hour)))
-		// TODO: billing cycle is up! time to charge
-		logger.Info("Billing cycle is up!")
+		billingTimer := workflow.NewTimer(ctx, time.Duration(subscription.BillingPeriodDays*24*float64(time.Hour)))
 
-		logger.Info("Current history length", "History Length", info.GetCurrentHistoryLength())
-		if info.GetCurrentHistoryLength() > EVENT_HISTORY_THRESHOLD {
-			continueAsNew.Send(ctx, true)
-		}
+		workflow.NewSelector(ctx).
+			AddFuture(billingTimer, func(f workflow.Future) {
+				// start timer for billing period. Must be async as update/cancel signals may come in.
+				logger.Info("Billing cycle is up! Time to charge...")
+			}).
+			AddReceive(continueAsNew, func(c workflow.ReceiveChannel, _ bool) {
+				var canMessage bool
+				c.Receive(ctx, &canMessage)
+				if canMessage {
+					logger.Info("History size too big. time to CAN")
+					// TODO continue-as-new
+				}
+			}).
+			Select(ctx)
 	}
 
 	logger.Info("Subscription workflow completed.")
