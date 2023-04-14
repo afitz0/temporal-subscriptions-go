@@ -98,8 +98,8 @@ func NewZapLogger() *zap.Logger {
 	}
 
 	config := zap.Config{
-		//Level: zap.NewAtomicLevelAt(zap.DebugLevel),
-		Level:            zap.NewAtomicLevelAt(zap.WarnLevel),
+		Level: zap.NewAtomicLevelAt(zap.DebugLevel),
+		//Level:            zap.NewAtomicLevelAt(zap.WarnLevel),
 		Development:      false,
 		Sampling:         nil,
 		Encoding:         "console",
