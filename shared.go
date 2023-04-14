@@ -9,6 +9,7 @@ type SubscriptionInfo struct {
 type CustomerInfo struct {
 	Name  string
 	Email string
+	UID   string
 }
 
 type UpdateSignal struct {

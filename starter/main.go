@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/pborman/uuid"
 	"go.temporal.io/sdk/client"
 
 	"starter"
@@ -21,14 +22,15 @@ func main() {
 	}
 	defer c.Close()
 
-	workflowOptions := client.StartWorkflowOptions{
-		ID:        "cid-1234",
-		TaskQueue: "subscriptions",
-	}
-
 	customer := starter.CustomerInfo{
 		Name:  "Fitz",
 		Email: "a@a.com",
+		UID:   uuid.New(),
+	}
+
+	workflowOptions := client.StartWorkflowOptions{
+		ID:        "cid-" + customer.UID,
+		TaskQueue: "subscriptions",
 	}
 
 	sub := starter.SubscriptionInfo{
