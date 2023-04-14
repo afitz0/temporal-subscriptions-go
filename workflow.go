@@ -18,7 +18,6 @@ type Messages struct {
 func (s *Messages) HandleSignals(ctx workflow.Context, canChannel workflow.Channel) {
 	logger := workflow.GetLogger(ctx)
 	selector := workflow.NewSelector(ctx)
-	info := workflow.GetInfo(ctx)
 
 	for {
 		selector.AddReceive(workflow.GetSignalChannel(ctx, "update"), func(c workflow.ReceiveChannel, _ bool) {
@@ -26,10 +25,6 @@ func (s *Messages) HandleSignals(ctx workflow.Context, canChannel workflow.Chann
 			c.Receive(ctx, &updateInfo)
 			logger.Info("Received update signal", "data", updateInfo)
 			// TODO: apply updates
-
-			if info.GetCurrentHistoryLength() > EVENT_HISTORY_THRESHOLD {
-				canChannel.Send(ctx, true)
-			}
 		})
 
 		selector.AddReceive(workflow.GetSignalChannel(ctx, "cancel"), func(c workflow.ReceiveChannel, _ bool) {
@@ -39,10 +34,6 @@ func (s *Messages) HandleSignals(ctx workflow.Context, canChannel workflow.Chann
 
 			if cancel.CancelSubscription {
 				// TODO: cancel subscription
-			}
-
-			if info.GetCurrentHistoryLength() > EVENT_HISTORY_THRESHOLD {
-				canChannel.Send(ctx, true)
 			}
 		})
 
