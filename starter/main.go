@@ -33,6 +33,7 @@ func main() {
 		TaskQueue: "subscriptions",
 	}
 
+	// SUPER short periods to allow for easier testing.
 	sub := starter.SubscriptionInfo{
 		TrialPeriodDays:   float64(10.0 / (24 * 60 * 60)),
 		Amount:            10.00,

@@ -7,8 +7,14 @@ import (
 )
 
 var (
+	// These thresholds/periods are purposefully short to allow for easier
+	// testing and demonstration of Continue-As-New. The Temporal Events in
+	// this application are small enough that it's unlikely to hit the event
+	// *size* limit, and so in the "real" version of this,
+	// EVENT_HISTORY_THRESHOLD should be much closer to 50k.
 	EVENT_HISTORY_THRESHOLD      = 1000
 	HISTORY_CHECK_PERIOD_SECONDS = 5
+
 	// TODO making this a global feels icky. What's the better pattern, given workflow.Go doesn't accept additional args?
 	CONTINUE_AS_NEW_CHANNEL workflow.Channel
 )
