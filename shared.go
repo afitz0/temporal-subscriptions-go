@@ -1,9 +1,15 @@
 package starter
 
+import "time"
+
 type SubscriptionInfo struct {
-	TrialPeriodDays   float64
-	Amount            float32
-	BillingPeriodDays float64
+	Amount   float32
+	Customer CustomerInfo
+
+	TrialPeriodDays        float64
+	TrialPeriodRemaining   time.Duration
+	BillingPeriodDays      float64
+	BillingPeriodRemaining time.Duration
 }
 
 type CustomerInfo struct {

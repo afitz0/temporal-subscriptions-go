@@ -36,12 +36,13 @@ func main() {
 	sub := starter.SubscriptionInfo{
 		TrialPeriodDays:   float64(10.0 / (24 * 60 * 60)),
 		Amount:            10.00,
-		BillingPeriodDays: float64(1.0 / (24 * 60 * 60)),
+		BillingPeriodDays: float64(0.5 / (24 * 60 * 60)),
+		Customer:          customer,
 	}
 
 	fmt.Println("trial: ", sub.TrialPeriodDays)
 
-	we, err := c.ExecuteWorkflow(context.Background(), workflowOptions, starter.SubscriptionWorkflow, customer, sub)
+	we, err := c.ExecuteWorkflow(context.Background(), workflowOptions, starter.SubscriptionWorkflow, sub)
 	if err != nil {
 		log.Fatalln("Unable to execute workflow", err)
 	}
