@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/pborman/uuid"
+	"github.com/google/uuid"
 	"go.temporal.io/sdk/client"
 
 	subs "github.com/afitz0/temporal-subscriptions-go"
@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	c, err := client.NewLazyClient(client.Options{
+	c, err := client.Dial(client.Options{
 		Logger: zapadapter.NewZapAdapter(
 			zapadapter.NewZapLogger()),
 	})
@@ -22,10 +22,12 @@ func main() {
 	}
 	defer c.Close()
 
+	uid := uuid.New()
+
 	customer := subs.CustomerInfo{
 		Name:  "Fitz",
 		Email: "a@a.com",
-		UID:   uuid.New(),
+		UID:   uid.String(),
 	}
 
 	workflowOptions := client.StartWorkflowOptions{
@@ -45,7 +47,7 @@ func main() {
 
 	we, err := c.ExecuteWorkflow(context.Background(), workflowOptions, subs.SubscriptionWorkflow, sub)
 	if err != nil {
-		log.Fatalln("Unable to execute workflow", err)
+		log.Fatalln("Unable to start workflow", err)
 	}
 
 	log.Println("Started workflow", "WorkflowID", we.GetID(), "RunID", we.GetRunID())

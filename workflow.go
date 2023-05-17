@@ -102,13 +102,18 @@ func SubscriptionWorkflow(ctx workflow.Context, subscription SubscriptionInfo) e
 	trialTimer := workflow.NewTimer(ctx, trialDuration)
 	expectedTimerFire := workflow.Now(ctx).Add(trialDuration)
 
+	var timerError error
 	workflow.NewSelector(ctx).
 		AddFuture(trialTimer, func(f workflow.Future) {
 			logger.Info("Trial has ended. Sending 'trial is over' email, then entering normal billing cycle.")
+			timerError = f.Get(ctx, nil)
 		}).
 		AddReceive(CONTINUE_AS_NEW_CHANNEL, continueHandler).
 		// wait for update/cancel signals, Continue-As-New channel, or Trial timer.
 		Select(ctx)
+	if timerError != nil {
+		logger.Error("Trial timer failed.", "Error", err)
+	}
 
 	// if we're here because of Continue-As-New, then do that. Otherwise continue as normal.
 	if continueAsNew {
@@ -121,7 +126,11 @@ func SubscriptionWorkflow(ctx workflow.Context, subscription SubscriptionInfo) e
 	}
 
 	subscription.TrialPeriodRemaining = time.Duration(0)
-	workflow.ExecuteActivity(ctx, a.SendTrialExpiredEmail, subscription).Get(ctx, nil)
+	err = workflow.ExecuteActivity(ctx, a.SendTrialExpiredEmail, subscription).Get(ctx, nil)
+	if err != nil {
+		logger.Error("SendTrialExpiredEmail Activity failed.", "Error", err)
+		return err
+	}
 
 	for !m.UpdateInfo.CancelSubscription {
 		// start of billing cycle, charge a subscription
@@ -154,7 +163,11 @@ func SubscriptionWorkflow(ctx workflow.Context, subscription SubscriptionInfo) e
 		}
 	}
 
-	workflow.ExecuteActivity(ctx, a.SendCancelationEmail, subscription).Get(ctx, nil)
+	err = workflow.ExecuteActivity(ctx, a.SendCancelationEmail, subscription).Get(ctx, nil)
+	if err != nil {
+		logger.Error("SendCancelationEmail Activity failed.", "Error", err)
+		return err
+	}
 
 	logger.Info("Subscription workflow completed.")
 	return nil

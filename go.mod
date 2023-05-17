@@ -1,6 +1,6 @@
 module github.com/afitz0/temporal-subscriptions-go
 
-go 1.18
+go 1.20
 
 require (
 	github.com/pborman/uuid v1.2.1
