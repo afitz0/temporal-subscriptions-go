@@ -21,22 +21,21 @@ func SubscriptionWorkflow(ctx workflow.Context, subscription SubscriptionInfo) (
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
 	logger := workflow.GetLogger(ctx)
-	logger.Info("Subscription workflow started", "Customer", subscription.Customer, "Subscription", subscription)
+	logger.Info("Subscription workflow started.", "Customer", subscription.Customer, "Subscription", subscription)
 
 	err = subscription.trialPeriod(ctx)
-	var continueAsNewErr *workflow.ContinueAsNewError
-	if err != nil && errors.As(err, &continueAsNewErr) {
+	if contErr, _ := err.(*workflow.ContinueAsNewError); contErr != nil {
 		return subscription.maybeContinueAsNew(ctx, err)
 	} else if err != nil {
-		logger.Error("Error while handling trial period", "Error", err)
+		logger.Error("Error while handling trial period.", "Error", err)
 		return err
 	}
 
 	err = subscription.billingCycle(ctx)
-	if err != nil && errors.As(err, &continueAsNewErr) {
+	if contErr, _ := err.(*workflow.ContinueAsNewError); contErr != nil {
 		return subscription.maybeContinueAsNew(ctx, err)
 	} else if err != nil {
-		logger.Error("Error while handling billing cycle", "Error", err)
+		logger.Error("Error while handling billing cycle.", "Error", err)
 		return err
 	}
 
@@ -51,6 +50,10 @@ func SubscriptionWorkflow(ctx workflow.Context, subscription SubscriptionInfo) (
 }
 
 func (s *SubscriptionInfo) trialPeriod(ctx workflow.Context) (err error) {
+	if s.TrialPeriodExpiration.IsZero() || workflow.Now(ctx).After(s.TrialPeriodExpiration) {
+		return nil
+	}
+
 	logger := workflow.GetLogger(ctx)
 	selector := workflow.NewSelector(ctx)
 	info := workflow.GetInfo(ctx)
@@ -58,77 +61,76 @@ func (s *SubscriptionInfo) trialPeriod(ctx workflow.Context) (err error) {
 	var a *Activities
 	var cancelSub bool
 
-	if !s.TrialPeriodExpiration.IsZero() && s.TrialPeriodExpiration.After(workflow.Now(ctx)) {
-		err = workflow.ExecuteActivity(ctx, a.SendWelcomeEmail, s).Get(ctx, nil)
-		if err != nil {
-			logger.Error("Welcome Email Activity failed.", "Error", err)
-			return err
-		}
+	err = workflow.ExecuteActivity(ctx, a.SendWelcomeEmail, s).Get(ctx, nil)
+	if err != nil {
+		logger.Error("Welcome Email Activity failed.", "Error", err)
+		return err
+	}
 
-		// Start trial period timer, async
-		trialDuration := s.TrialPeriodExpiration.Sub(workflow.Now(ctx))
-		trialTimer := workflow.NewTimer(ctx, trialDuration)
+	// Start trial period timer, async
+	trialDuration := s.TrialPeriodExpiration.Sub(workflow.Now(ctx))
+	trialTimer := workflow.NewTimer(ctx, trialDuration)
 
-		var timerError error
-		trialOver := false
-		selector.AddFuture(trialTimer, func(f workflow.Future) {
-			logger.Info("Trial has ended. Sending 'trial is over' email, then entering normal billing cycle.")
-			trialOver = true
-			timerError = f.Get(ctx, nil)
-		})
+	var timerError error
+	trialOver := false
+	selector.AddFuture(trialTimer, func(f workflow.Future) {
+		logger.Info("Trial has ended. Sending 'trial is over' email, then entering normal billing cycle.")
+		trialOver = true
+		timerError = f.Get(ctx, nil)
+	})
 
-		for !trialOver {
-			selector.
-				// Signal Handler for updating billing address or other customer info
-				AddReceive(workflow.GetSignalChannel(ctx, "update"), func(c workflow.ReceiveChannel, _ bool) {
-					var updateInfo UpdateSignal
-					c.Receive(ctx, &updateInfo)
-					logger.Info("Received update signal.", "Data", updateInfo)
-					s = &updateInfo.Subscription
-				}).
-				// Signal handler for canceling the subscription
-				AddReceive(workflow.GetSignalChannel(ctx, "cancel"), func(c workflow.ReceiveChannel, _ bool) {
-					var cancel UpdateSignal
-					c.Receive(ctx, &cancel)
-					logger.Info("Received cancel signal.", "Data", cancel)
+	for !trialOver {
+		selector.
+			// Signal Handler for updating billing address or other customer info
+			AddReceive(workflow.GetSignalChannel(ctx, "update"), func(c workflow.ReceiveChannel, _ bool) {
+				var updateInfo UpdateSignal
+				c.Receive(ctx, &updateInfo)
+				logger.Info("Received update signal.", "Data", updateInfo)
+				s = &updateInfo.Subscription
+			}).
+			// Signal handler for canceling the subscription
+			AddReceive(workflow.GetSignalChannel(ctx, "cancel"), func(c workflow.ReceiveChannel, _ bool) {
+				var cancel UpdateSignal
+				c.Receive(ctx, &cancel)
+				logger.Info("Received cancel signal.", "Data", cancel)
 
-					cancelSub = cancel.CancelSubscription
-				})
-
-			err = workflow.Await(ctx, func() bool {
-				logger.Info("Current history length", "History Length", info.GetCurrentHistoryLength())
-				return info.GetCurrentHistoryLength() > EventHistoryThreshold || selector.HasPending()
+				cancelSub = cancel.CancelSubscription
 			})
-			if err != nil {
-				logger.Error("Awaiting history or selector failed.", "Error", err)
-				return err
-			}
 
-			if info.GetCurrentHistoryLength() > EventHistoryThreshold {
-				canError := workflow.NewContinueAsNewError(ctx, SubscriptionWorkflow, *s)
-				return canError
-			}
-
-			selector.Select(ctx)
-
-			if timerError != nil {
-				logger.Error("Trial timer failed.", "Error", err)
-				return err
-			}
-
-			if cancelSub {
-				logger.Info("Received request to cancel subscription. Not continuing into normal billing cycle. Workflow done.")
-				return nil
-			}
+		err = workflow.Await(ctx, func() bool {
+			logger.Info("Current history length.", "History Length", info.GetCurrentHistoryLength())
+			return info.GetCurrentHistoryLength() > EventHistoryThreshold || selector.HasPending()
+		})
+		if err != nil {
+			logger.Error("Awaiting history or selector failed.", "Error", err)
+			return err
 		}
 
-		s.TrialPeriodExpiration = time.Time{}
-		err = workflow.ExecuteActivity(ctx, a.SendTrialExpiredEmail, s).Get(ctx, nil)
-		if err != nil {
-			logger.Error("SendTrialExpiredEmail Activity failed.", "Error", err)
+		if info.GetCurrentHistoryLength() > EventHistoryThreshold {
+			canError := workflow.NewContinueAsNewError(ctx, SubscriptionWorkflow, *s)
+			return canError
+		}
+
+		selector.Select(ctx)
+
+		if timerError != nil {
+			logger.Error("Trial timer failed.", "Error", err)
 			return err
+		}
+
+		if cancelSub {
+			logger.Info("Received request to cancel subscription. Not continuing into normal billing cycle. Workflow done.")
+			return nil
 		}
 	}
+
+	s.TrialPeriodExpiration = time.Time{}
+	err = workflow.ExecuteActivity(ctx, a.SendTrialExpiredEmail, s).Get(ctx, nil)
+	if err != nil {
+		logger.Error("SendTrialExpiredEmail Activity failed.", "Error", err)
+		return err
+	}
+
 	return nil
 }
 
@@ -180,7 +182,7 @@ func (s *SubscriptionInfo) billingCycle(ctx workflow.Context) (err error) {
 			})
 
 		err = workflow.Await(ctx, func() bool {
-			logger.Info("Current history length", "HistoryLength", info.GetCurrentHistoryLength())
+			logger.Info("Current history length.", "HistoryLength", info.GetCurrentHistoryLength())
 			return info.GetCurrentHistoryLength() > EventHistoryThreshold || selector.HasPending()
 		})
 		if err != nil {
