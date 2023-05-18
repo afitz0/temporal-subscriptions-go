@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
+	"time"
 
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/client"
@@ -37,13 +37,11 @@ func main() {
 
 	// SUPER short periods to allow for easier testing.
 	sub := subs.SubscriptionInfo{
-		TrialPeriodDays:   float64(10.0 / (24 * 60 * 60)),
-		Amount:            10.00,
-		BillingPeriodDays: float64(0.5 / (24 * 60 * 60)),
-		Customer:          customer,
+		TrialPeriodExpiration: time.Now().Add(time.Duration(time.Second * 5)),
+		Amount:                10.00,
+		BillingPeriodDuration: time.Duration(time.Second * 5),
+		Customer:              customer,
 	}
-
-	fmt.Println("trial: ", sub.TrialPeriodDays)
 
 	we, err := c.ExecuteWorkflow(context.Background(), workflowOptions, subs.SubscriptionWorkflow, sub)
 	if err != nil {
