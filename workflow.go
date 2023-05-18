@@ -83,14 +83,14 @@ func (s *SubscriptionInfo) trialPeriod(ctx workflow.Context) (err error) {
 				AddReceive(workflow.GetSignalChannel(ctx, "update"), func(c workflow.ReceiveChannel, _ bool) {
 					var updateInfo UpdateSignal
 					c.Receive(ctx, &updateInfo)
-					logger.Info("Received update signal", "data", updateInfo)
+					logger.Info("Received update signal.", "Data", updateInfo)
 					s = &updateInfo.Subscription
 				}).
 				// Signal handler for canceling the subscription
 				AddReceive(workflow.GetSignalChannel(ctx, "cancel"), func(c workflow.ReceiveChannel, _ bool) {
 					var cancel UpdateSignal
 					c.Receive(ctx, &cancel)
-					logger.Info("Received cancel signal", "data", cancel)
+					logger.Info("Received cancel signal.", "Data", cancel)
 
 					cancelSub = cancel.CancelSubscription
 				})
@@ -160,27 +160,27 @@ func (s *SubscriptionInfo) billingCycle(ctx workflow.Context) (err error) {
 		selector.
 			AddFuture(billingTimer, func(f workflow.Future) {
 				// start timer for billing period. Must be async as update/cancel signals may come in.
-				logger.Info("Billing cycle is up! Time to charge...")
+				logger.Info("Billing cycle is up! Time to charge.")
 				timerError = f.Get(ctx, nil)
 			}).
 			// Signal Handler for updating billing address or other customer info
 			AddReceive(workflow.GetSignalChannel(ctx, "update"), func(c workflow.ReceiveChannel, _ bool) {
 				var updateInfo UpdateSignal
 				c.Receive(ctx, &updateInfo)
-				logger.Info("Received update signal", "data", updateInfo)
+				logger.Info("Received update signal.", "Data", updateInfo)
 				s = &updateInfo.Subscription
 			}).
 			// Signal handler for canceling the subscription
 			AddReceive(workflow.GetSignalChannel(ctx, "cancel"), func(c workflow.ReceiveChannel, _ bool) {
 				var cancel UpdateSignal
 				c.Receive(ctx, &cancel)
-				logger.Info("Received cancel signal", "data", cancel)
+				logger.Info("Received cancel signal.", "Data", cancel)
 
 				cancelSub = cancel.CancelSubscription
 			})
 
 		err = workflow.Await(ctx, func() bool {
-			logger.Info("Current history length", "History Length", info.GetCurrentHistoryLength())
+			logger.Info("Current history length", "HistoryLength", info.GetCurrentHistoryLength())
 			return info.GetCurrentHistoryLength() > EventHistoryThreshold || selector.HasPending()
 		})
 		if err != nil {
@@ -221,7 +221,7 @@ func (s *SubscriptionInfo) drainSignals(ctx workflow.Context) (*SubscriptionInfo
 		if !ok {
 			break
 		}
-		workflow.GetLogger(ctx).Info("Received update signal.", "Subscription Info", update.Subscription)
+		workflow.GetLogger(ctx).Info("Received update signal.", "SubscriptionInfo", update.Subscription)
 		// overwriting, but keep whatever the last one was.
 		s = &update.Subscription
 	}
@@ -252,6 +252,6 @@ func (s *SubscriptionInfo) maybeContinueAsNew(ctx workflow.Context, canError err
 		}
 		return nil
 	}
-	workflow.GetLogger(ctx).Info("Returning Continue-As-New")
+	workflow.GetLogger(ctx).Info("Returning Continue-As-New.")
 	return canError
 }

@@ -18,3 +18,7 @@ Meanwhile, a couple other things happen in parallel:
 1. Watch for a signal to cancel the subscription
 2. Watch for a signal to update the customer or subscription information
 3. Check the history length to determine if a "Continue-As-New" is necessary.
+
+Roughly, the Workflow follows the steps outlind in this diagram:
+
+![Process Diagram for the Workflow](./process%20diagram.png)
