@@ -21,7 +21,7 @@ func SubscriptionWorkflow(ctx workflow.Context, subscription SubscriptionInfo) (
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
 	logger := workflow.GetLogger(ctx)
-	logger.Info("Subscription workflow started", "customer", subscription.Customer, "subscription", subscription)
+	logger.Info("Subscription workflow started", "Customer", subscription.Customer, "Subscription", subscription)
 
 	err = subscription.trialPeriod(ctx)
 	var continueAsNewErr *workflow.ContinueAsNewError

@@ -29,6 +29,6 @@ func (a *Activities) SendCancelationEmail(ctx context.Context, subscription Subs
 
 func (a *Activities) ChargeSubscription(ctx context.Context, subscription SubscriptionInfo) error {
 	logger := activity.GetLogger(ctx)
-	logger.Info(fmt.Sprintf("Charging %v the %.2f subscription fee", subscription.Customer.Email, subscription.Amount))
+	logger.Info(fmt.Sprintf("Charging the subscription fee", "CustomerEmail", subscription.Customer.Email, "Amount", subscription.AmountCents))
 	return nil
 }

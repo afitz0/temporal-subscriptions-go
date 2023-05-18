@@ -5,9 +5,9 @@ import "time"
 // SubscriptionInfo contains the necessary values for mananging a full subscription
 // lifecycle, including if the Workflow is Continue-As-New'd.
 type SubscriptionInfo struct {
-	// Amount to charge the customer at the end of the trial period and then after every
+	// AmountCents to charge the customer at the end of the trial period and then after every
 	// `BillingPeriodDuration` time.
-	Amount float32
+	AmountCents int
 
 	// The customer's information to send emails and billing info to.
 	Customer CustomerInfo

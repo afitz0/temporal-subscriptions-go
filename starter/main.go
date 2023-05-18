@@ -38,7 +38,7 @@ func main() {
 	// SUPER short periods to allow for easier testing.
 	sub := subs.SubscriptionInfo{
 		TrialPeriodExpiration: time.Now().Add(time.Duration(time.Second * 5)),
-		Amount:                10.00,
+		AmountCents:           1000,
 		BillingPeriodDuration: time.Duration(time.Second * 5),
 		Customer:              customer,
 	}
