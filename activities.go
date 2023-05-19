@@ -2,7 +2,6 @@ package subscription
 
 import (
 	"context"
-	"fmt"
 
 	"go.temporal.io/sdk/activity"
 )
@@ -29,6 +28,6 @@ func (a *Activities) SendCancelationEmail(ctx context.Context, subscription Subs
 
 func (a *Activities) ChargeSubscription(ctx context.Context, subscription SubscriptionInfo) error {
 	logger := activity.GetLogger(ctx)
-	logger.Info(fmt.Sprintf("Charging the subscription fee.", "CustomerEmail", subscription.Customer.Email, "Amount", subscription.AmountCents))
+	logger.Info("Charging the subscription fee.", "CustomerEmail", subscription.Customer.Email, "Amount", subscription.AmountCents)
 	return nil
 }

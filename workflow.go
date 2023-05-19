@@ -73,30 +73,29 @@ func (s *SubscriptionInfo) trialPeriod(ctx workflow.Context) (err error) {
 
 	var timerError error
 	trialOver := false
-	selector.AddFuture(trialTimer, func(f workflow.Future) {
-		logger.Info("Trial has ended. Sending 'trial is over' email, then entering normal billing cycle.")
-		trialOver = true
-		timerError = f.Get(ctx, nil)
-	})
+	selector.
+		AddFuture(trialTimer, func(f workflow.Future) {
+			logger.Info("Trial has ended. Sending 'trial is over' email, then entering normal billing cycle.")
+			trialOver = true
+			timerError = f.Get(ctx, nil)
+		}).
+		// Signal Handler for updating billing address or other customer info
+		AddReceive(workflow.GetSignalChannel(ctx, "update"), func(c workflow.ReceiveChannel, _ bool) {
+			var updateInfo UpdateSignal
+			c.Receive(ctx, &updateInfo)
+			logger.Info("Received update signal.", "Data", updateInfo)
+			s = &updateInfo.Subscription
+		}).
+		// Signal handler for canceling the subscription
+		AddReceive(workflow.GetSignalChannel(ctx, "cancel"), func(c workflow.ReceiveChannel, _ bool) {
+			var cancel UpdateSignal
+			c.Receive(ctx, &cancel)
+			logger.Info("Received cancel signal.", "Data", cancel)
+
+			cancelSub = cancel.CancelSubscription
+		})
 
 	for !trialOver {
-		selector.
-			// Signal Handler for updating billing address or other customer info
-			AddReceive(workflow.GetSignalChannel(ctx, "update"), func(c workflow.ReceiveChannel, _ bool) {
-				var updateInfo UpdateSignal
-				c.Receive(ctx, &updateInfo)
-				logger.Info("Received update signal.", "Data", updateInfo)
-				s = &updateInfo.Subscription
-			}).
-			// Signal handler for canceling the subscription
-			AddReceive(workflow.GetSignalChannel(ctx, "cancel"), func(c workflow.ReceiveChannel, _ bool) {
-				var cancel UpdateSignal
-				c.Receive(ctx, &cancel)
-				logger.Info("Received cancel signal.", "Data", cancel)
-
-				cancelSub = cancel.CancelSubscription
-			})
-
 		err = workflow.Await(ctx, func() bool {
 			logger.Info("Current history length.", "History Length", info.GetCurrentHistoryLength())
 			return info.GetCurrentHistoryLength() > EventHistoryThreshold || selector.HasPending()
@@ -142,6 +141,23 @@ func (s *SubscriptionInfo) billingCycle(ctx workflow.Context) (err error) {
 	var a *Activities
 	cancelSub := false
 
+	selector.
+		// Signal Handler for updating billing address or other customer info
+		AddReceive(workflow.GetSignalChannel(ctx, "update"), func(c workflow.ReceiveChannel, _ bool) {
+			var updateInfo UpdateSignal
+			c.Receive(ctx, &updateInfo)
+			logger.Info("Received update signal.", "Data", updateInfo)
+			s = &updateInfo.Subscription
+		}).
+		// Signal handler for canceling the subscription
+		AddReceive(workflow.GetSignalChannel(ctx, "cancel"), func(c workflow.ReceiveChannel, _ bool) {
+			var cancel UpdateSignal
+			c.Receive(ctx, &cancel)
+			logger.Info("Received cancel signal.", "Data", cancel)
+
+			cancelSub = cancel.CancelSubscription
+		})
+
 	for !cancelSub {
 		// start of billing cycle, charge a subscription
 		err = workflow.ExecuteActivity(ctx, a.ChargeSubscription, s).Get(ctx, nil)
@@ -164,21 +180,6 @@ func (s *SubscriptionInfo) billingCycle(ctx workflow.Context) (err error) {
 				// start timer for billing period. Must be async as update/cancel signals may come in.
 				logger.Info("Billing cycle is up! Time to charge.")
 				timerError = f.Get(ctx, nil)
-			}).
-			// Signal Handler for updating billing address or other customer info
-			AddReceive(workflow.GetSignalChannel(ctx, "update"), func(c workflow.ReceiveChannel, _ bool) {
-				var updateInfo UpdateSignal
-				c.Receive(ctx, &updateInfo)
-				logger.Info("Received update signal.", "Data", updateInfo)
-				s = &updateInfo.Subscription
-			}).
-			// Signal handler for canceling the subscription
-			AddReceive(workflow.GetSignalChannel(ctx, "cancel"), func(c workflow.ReceiveChannel, _ bool) {
-				var cancel UpdateSignal
-				c.Receive(ctx, &cancel)
-				logger.Info("Received cancel signal.", "Data", cancel)
-
-				cancelSub = cancel.CancelSubscription
 			})
 
 		err = workflow.Await(ctx, func() bool {
